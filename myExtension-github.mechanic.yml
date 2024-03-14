@@ -1,0 +1,8 @@
+extensionName: Interpolation Slider (GitHub)
+repository: http://github.com/robodocs/InterpolationSliderRoboFontExt
+extensionPath: build/InterpolationSlider.roboFontExt
+description: The extension is designed to give a simple interface to preview how the points move during an interpolation of two masters.
+developer: Andy Clymer
+developerURL: http://www.andyclymer.com
+tags: [ demo ]
+icon: https://raw.githubusercontent.com/roboDocs/rf-extension-boilerplate/master/myExtensionMechanicIcon.png
