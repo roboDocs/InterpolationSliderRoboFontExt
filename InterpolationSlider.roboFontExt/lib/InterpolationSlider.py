@@ -1,80 +1,276 @@
-# coding: utf-8
-import vanilla
-from mojo.events import addObserver, removeObserver
-from mojo.UI import CurrentGlyphWindow
-import mojo.drawingTools as dt
-from fontTools.pens.cocoaPen import CocoaPen
-from AppKit import NSColor
-from fontTools.pens.basePen import BasePen
+import ezui
+import merz
+from mojo.events import postEvent
+from mojo.roboFont import AllFonts, CurrentGlyph, RGlyph
+from mojo.subscriber import Subscriber, registerGlyphEditorSubscriber, registerSubscriberEvent, unregisterGlyphEditorSubscriber
+from mojo.UI import inDarkMode    
 
 """
 Interpolation Slider
 by Andy Clymer, June 2018
 """
 
-class DecomposingPen(BasePen):
+DEFAULT_KEY = "com.andyclymer.interpolationSlider"
+
+class drawinterpolatedGlyph(Subscriber):
+
+    debug = True
+    controller = None
+
+    def build(self):
+        glyphEditor = self.getGlyphEditor()
+        
+        self.container = glyphEditor.extensionContainer(
+            identifier=DEFAULT_KEY,
+            location='background',
+            clear=True
+        )
+        self.previewContainer = glyphEditor.extensionContainer(
+            identifier=DEFAULT_KEY,
+            location='preview',
+            clear=True
+        )
+        self.referenceGlyphLayer = self.container.appendBaseSublayer()
+        self.previewGlyphLayer = self.previewContainer.appendBaseSublayer()
+        self.isPreview = False
+        self.prevWidth = 0
+        
+    def destroy(self):
+        self.container.clearSublayers()
+        self.previewContainer.clearSublayers()
+
+    def glyphUpdated(self):
+        status = "❌"
+
+        currentGlyph = CurrentGlyph()
+        self.referenceGlyphLayer.setPosition((currentGlyph.width + 30, 0))
+        self.referenceGlyphLayer.clearSublayers()
+        self.previewGlyphLayer.setPosition((currentGlyph.width + 30, 0))
+        self.previewGlyphLayer.clearSublayers()
+
+        interpValue = self.controller.w.getItemValue("interpolationSlider")
+
+        if currentGlyph.name in self.controller.source0 and currentGlyph.name in self.controller.source1:
+
+            glyph0 = self.controller.source0[currentGlyph.name]
+            glyph1 = self.controller.source1[currentGlyph.name]
+
+            self.interpolatedGlyph = RGlyph()
+            # Interpolate
+            self.interpolatedGlyph.interpolate(interpValue, glyph0, glyph1)
+
+            if glyph0 == glyph1:
+                status = "⚪️"
+            elif len(self.interpolatedGlyph.contours) > 0:
+                status = "✅"
+        
+        self.controller.w.getItem("compatibilityText").set(f"Compatibility: {status}")
+
+        if not status == "❌":
+            if self.isPreview:
+                self.drawPreviewGlyph()
+            else:
+                self.drawGlyph()
+
+    def drawGlyph(self):
+        # Draw the interpolated glyph outlines
+        isDarkMode = inDarkMode()
+        glyphLayer = self.referenceGlyphLayer.appendPathSublayer(
+            fillColor=None,
+            strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+            strokeWidth=.5,
+        )
+        glyphPath = self.interpolatedGlyph.getRepresentation("merz.CGPath")
+        glyphLayer.setPath(glyphPath)
+
+        for contour in self.interpolatedGlyph.contours:
+            for bPoint in contour.bPoints:
+                inLoc = self.addPoints(bPoint.anchor, bPoint.bcpIn)
+                outLoc = self.addPoints(bPoint.anchor, bPoint.bcpOut)
+
+                self.referenceGlyphLayer.appendLineSublayer(
+                   startPoint=inLoc,
+                   endPoint=bPoint.anchor,
+                   strokeWidth=.5,
+                   strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+                )
+                self.referenceGlyphLayer.appendLineSublayer(
+                   startPoint=bPoint.anchor,
+                   endPoint=outLoc,
+                   strokeWidth=.5,
+                   strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+                )
+                self.referenceGlyphLayer.appendSymbolSublayer(
+                    position=outLoc,
+                    imageSettings=dict(
+                        name="oval",
+                        size=(5, 5),
+                        fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
+                        strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+                        strokeWidth=.5,
+                    )
+                )
+                self.referenceGlyphLayer.appendSymbolSublayer(
+                    position=inLoc,
+                    imageSettings=dict(
+                        name="oval",
+                        size=(5, 5),
+                        fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
+                        strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+                        strokeWidth=.5,
+                    )
+                )
+                self.referenceGlyphLayer.appendSymbolSublayer(
+                    position=bPoint.anchor,
+                    imageSettings=dict(
+                        name="oval",
+                        size=(5, 5),
+                        fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
+                        strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+                        strokeWidth=.5,
+                    )
+                )
+ 
+    def drawPreviewGlyph(self):
+        # Draw a filled in version of the interpolated glyph
+        isDarkMode = inDarkMode()
+        self.previewGlyphLayer.clearSublayers()
+        glyphLayer = self.previewGlyphLayer.appendPathSublayer(
+            fillColor=(isDarkMode, isDarkMode, isDarkMode, .4),
+        )
+        glyphPath = self.interpolatedGlyph.getRepresentation("merz.CGPath")
+        glyphLayer.setPath(glyphPath)
     
-    def __init__(self, glyphSet, outPen):
-        super(DecomposingPen, self).__init__(glyphSet)
-        self._moveTo = outPen.moveTo
-        self._lineTo = outPen.lineTo
-        self._curveToOne = outPen.curveTo
-        self._closePath = outPen.closePath
-        self._endPath = outPen.endPath
+
+    def addPoints(self, pt0, pt1):
+        return (pt0[0] + pt1[0], pt0[1] + pt1[1])
+
+    def interpolationSliderDidChange(self, info):
+        self.glyphUpdated()
+        
+    def glyphEditorDidSetGlyph(self, info):
+        self.glyphUpdated()
+        
+    def sharpToolDidChange(self, info):
+        self.glyphUpdated()
+
+    def glyphDidChange(self, info):
+        self.glyphUpdated()
+
+    def glyphEditorWillShowPreview(self, info):
+        self.isPreview = True
+        self.glyphUpdated()
+
+    def glyphEditorWillHidePreview(self, info):
+        self.isPreview = False
+        self.glyphUpdated()
+
+    def roboFontAppearanceChanged(self, info):
+        self.glyphUpdated()
 
 
+class InterpolationSliderInterface(Subscriber, ezui.WindowController):
 
-class InterpolationPreviewWindow(object):
-    
-    def __init__(self):
-        
-        self.currentGlyph = None
-        self.window = None
-        
-        self.fonts = []
-        self.fontNames = []
-        
-        self.glyph0 = RGlyph()#None
-        self.glyph1 = RGlyph()#None
-        self.compatibilityReport = None
-        self.interpolatedGlyph = RGlyph()
-        
-        self.w = vanilla.FloatingWindow((250, 155), "Interpolation Slider")
+    def build(self):
+        content = """
+        Sources:
+        (This is a PopUpButton. ...) @firstSourceButton
+        (This is a PopUpButton. ...) @secondSourceButton
+        Compatibility: ⚪️   @compatibilityText
+        ---
+        --X-- @interpolationSlider
+        """
+        descriptionData = dict(
+            content=dict(
+                sizeStyle="small",
+            ),
+            firstSourceButton=dict(
+                width=220,
+                selected=0,
+            ),
+            secondSourceButton=dict(
+                width=220,
+                selected=1,
+            ),
+            compatibilityText=dict(
+                alignment="right",
+                width="fill",
+            ),
+            interpolationSlider=dict(
+                minValue=0,
+                value=0,
+                maxValue=1,
+            ),
+        )
+        self.w = ezui.EZPanel(
+            title="Interpolation Slider",
+            size=(200, "auto"),
+            content=content,
+            margins=10,
+            descriptionData=descriptionData,
+            controller=self
+        )
+
+    def started(self):
         self.w.open()
-        self.w.title = vanilla.TextBox((10, 10, -10, 25), "Masters:", sizeStyle="small")
-        self.w.font0 = vanilla.PopUpButton((10, 25, -10, 25), [], callback=self.glyphChanged, sizeStyle="small")
-        self.w.font1 = vanilla.PopUpButton((10, 50, -10, 25), [], callback=self.glyphChanged, sizeStyle="small")
-        self.w.compatibilityText = vanilla.TextBox((-105, 83, 100, 35), u"Compatibility: ⚪️", sizeStyle="small")
-        self.w.line = vanilla.HorizontalLine((5, 110, -5, 1))
-        self.w.interpValue = vanilla.Slider((10, 120, -10, 25), callback=self.optionsChanged, minValue=0, maxValue=1)
-        self.w.interpValue.set(0.5)
-        self.w.bind("close", self.closed)
-        
+
         self.collectFonts()
-        self.glyphChanged(None)
-        
-        addObserver(self, "glyphChanged", "currentGlyphChanged")
-        addObserver(self, "fontsChanged", "newFontDidOpen")
-        addObserver(self, "fontsChanged", "fontDidOpen")
-        addObserver(self, "fontsChanged", "fontDidClose")
-        addObserver(self, "drawBkgnd", "drawBackground")
-        addObserver(self, "drawPreview", "drawPreview")
-    
-    
-    def closed(self, sender):
-        if self.window:
-            self.window.getGlyphView().refresh()
-        if self.currentGlyph:
-            self.currentGlyph.removeObserver(self, "Glyph.Changed")
-            self.currentGlyph.removeObserver(self, "Glyph.ContoursChanged")
-        removeObserver(self, "currentGlyphChanged")
-        removeObserver(self, "newFontDidOpen")
-        removeObserver(self, "fontDidOpen")
-        removeObserver(self, "fontDidClose")
-        removeObserver(self, "drawBackground")
-        removeObserver(self, "drawPreview")
-        
-    
+        self.optionsChanged()
+
+        drawinterpolatedGlyph.controller = self
+        registerGlyphEditorSubscriber(drawinterpolatedGlyph)
+
+    def destroy(self):
+        unregisterGlyphEditorSubscriber(drawinterpolatedGlyph)
+        drawinterpolatedGlyph.controller = None
+
+    def interpolationSliderCallback(self, sender):
+        postEvent(eventName)
+
+    def firstSourceButtonCallback(self, sender):
+        self.optionsChanged()
+
+    def secondSourceButtonCallback(self, sender):
+        self.optionsChanged()
+
+    def collectFonts(self):
+        firstSourceButton = self.w.getItem("firstSourceButton")
+        secondSourceButton = self.w.getItem("secondSourceButton")
+
+        # Hold aside the current font choices
+        font0idx = firstSourceButton.get()
+        font1idx = secondSourceButton.get()
+        if not font0idx == -1:
+            font0name = self.fontNames[font0idx]
+        else: font0name = None
+        if not font1idx == -1:
+            font1name = self.fontNames[font1idx]
+        else: font1name = None
+
+        # Collect info on all open fonts
+        self.fonts = AllFonts()
+        self.fontNames = []
+        for font in self.fonts:
+            self.fontNames.append(self.getFontName(font, self.fontNames))
+
+        # Update the popUpButtons
+        firstSourceButton.setItems(self.fontNames)
+        secondSourceButton.setItems(self.fontNames)
+
+        # If there weren't any previous names, try to set the first and second items in the list
+        if font0name == None:
+            if len(self.fonts):
+                firstSourceButton.set(0)
+        if font1name == None:
+            if len(self.fonts)  >= 1:
+                secondSourceButton.set(1)
+        # Otherwise, if there had already been fonts choosen before new fonts were loaded,
+        # try to set the index of the fonts that were already selected
+        if font0name in self.fontNames:
+            firstSourceButton.set(self.fontNames.index(font0name))
+        if font1name in self.fontNames:
+            secondSourceButton.set(self.fontNames.index(font1name))
+
     def getFontName(self, font, fonts):
         # A helper to get the font name, starting with the preferred name and working back to the PostScript name
         # Make sure that it's not the same name as another font in the fonts list
@@ -82,9 +278,9 @@ class InterpolationPreviewWindow(object):
             name = "%s %s" % (font.info.openTypeNamePreferredFamilyName, font.info.openTypeNamePreferredSubfamilyName)
         elif font.info.familyName and font.info.styleName:
             name = "%s %s" % (font.info.familyName, font.info.styleName)
-        elif font.info.fullName:
-            name = font.info.fullName
-        elif font.info.fullName:
+        elif font.info.postscriptFullName:
+            name = font.info.postscriptFullName
+        elif font.info.postscriptFullName:
             name = font.info.postscriptFontName
         else: name = "Untitled"
         # Add a number to the name if this name already exists
@@ -94,182 +290,43 @@ class InterpolationPreviewWindow(object):
                 i += 1
             name = name + " (%s)" % i
         return name
-        
-        
-    def collectFonts(self):
-        # Hold aside the current font choices
-        font0idx = self.w.font0.get()
-        font1idx = self.w.font1.get()
-        if not font0idx == -1:
-            font0name = self.fontNames[font0idx]
-        else: font0name = None
-        if not font1idx == -1:
-            font1name = self.fontNames[font1idx]
-        else: font1name = None
-        # Collect info on all open fonts
-        self.fonts = AllFonts()
-        self.fontNames = []
-        for font in self.fonts:
-            self.fontNames.append(self.getFontName(font, self.fontNames))
-        # Update the popUpButtons
-        self.w.font0.setItems(self.fontNames)
-        self.w.font1.setItems(self.fontNames)
-        # If there weren't any previous names, try to set the first and second items in the list
-        if font0name == None:
-            if len(self.fonts):
-                self.w.font0.set(0)
-        if font1name == None:
-            if len(self.fonts)  >= 1:
-                self.w.font1.set(1)
-        # Otherwise, if there had already been fonts choosen before new fonts were loaded,
-        # try to set the index of the fonts that were already selected
-        if font0name in self.fontNames:
-            self.w.font0.set(self.fontNames.index(font0name))
-        if font1name in self.fontNames:
-            self.w.font1.set(self.fontNames.index(font1name))
-        
-        
-    def fontsChanged(self, info):
+
+    def fontDocumentDidOpenNew(self, info):
         self.collectFonts()
-        self.glyphChanged(None)
-        
-        
-    def glyphChanged(self, info):
-        # Reset the glyph info
-        self.glyph0.clear()
-        self.glyph1.clear()
-        self.compatibilityReport = None
-        self.window = CurrentGlyphWindow()
-        self.interpolatedGlyph.clear()
-        # Remove any observers on the older CurrentGLyph and add them to the new one
-        if self.currentGlyph:
-            self.currentGlyph.removeObserver(self, "Glyph.Changed")
-            self.currentGlyph.removeObserver(self, "Glyph.ContoursChanged")
-        self.currentGlyph = CurrentGlyph()
-        if self.currentGlyph:
-            self.currentGlyph.addObserver(self, "optionsChanged", "Glyph.Changed")
-            self.currentGlyph.addObserver(self, "optionsChanged", "Glyph.ContoursChanged")
-        if not self.currentGlyph == None:
-            # Update the glyph info
-            glyphName = self.currentGlyph.name
-            master0idx = self.w.font0.get()
-            master1idx = self.w.font1.get()
-            master0 = self.fonts[master0idx]
-            master1 = self.fonts[master1idx]
-            if glyphName in master0:
-                self.glyph0.clear()
-                pen = DecomposingPen(master0, self.glyph0.getPen())
-                master0[glyphName].draw(pen)
+        self.optionsChanged()
 
-            if glyphName in master1:
-                self.glyph1.clear()
-                pen = DecomposingPen(master1, self.glyph1.getPen())
-                master1[glyphName].draw(pen)
-                
-        # Update the interp compatibility report
-        self.testCompatibility()
-        # Adjust the frame of the window to fit the interpolation
-        # (Thanks Frederik!)
-        if self.window:
-            widths = []
-            if self.glyph0:
-                widths.append(self.glyph0.width)
-            if self.glyph1:
-                widths.append(self.glyph1.width)
-            if len(widths):
-                widths.sort()
-                view = self.window.getGlyphView()
-                scale = view.scale()
-                (x, y), (w, h) = view.frame()
-                ox, oy = view.offset()
-                extraWidth = widths[-1] * scale
-                view.setOffset((ox, oy))
-                view.setFrame_(((x, y), (w + extraWidth, h)))
-        # Update the view
-        self.optionsChanged(None)
-        
-    
-    def testCompatibility(self):
-        status = u"⚪️"
-        if self.window:
-            if self.glyph0 == self.glyph1:
-                status = u"⚪️"
-            elif len(self.interpolatedGlyph.contours) > 0:
-                status = u"✅"
-            else: status = u"❌"
-        self.w.compatibilityText.set(u"Compatibility: %s" % status)
-                
-        
-    def optionsChanged(self, sender):
-        if self.glyph0 and self.glyph1:
-            # Interpolate
-            self.interpolatedGlyph.clear()
-            self.interpolatedGlyph.interpolate(self.w.interpValue.get(), self.glyph0, self.glyph1)
-        self.testCompatibility()
-        # ...and refresh the window
-        if self.window:
-            self.window.getGlyphView().refresh()
-                
-    
-    def addPoints(self, pt0, pt1):
-        return (pt0[0] + pt1[0], pt0[1] + pt1[1])
-        
-        
-    def subtractPoints(self, pt0, pt1):
-        return (pt0[0] - pt1[0], pt0[1] - pt1[1])
-        
-        
-    def drawBkgnd(self, info):
-        # Draw the interpolated glyph outlines
-        scale = info["scale"]
-        ptSize = 7 * scale
-        if self.interpolatedGlyph:
-            # Draw the glyph outline
-            pen = CocoaPen(None)
-            self.interpolatedGlyph.draw(pen)
-            dt.fill(r=None, g=None, b=None, a=1)
-            dt.stroke(r=0, g=0, b=0, a=0.4)
-            dt.strokeWidth(2*scale)
-            dt.save()
-            dt.translate(self.currentGlyph.width)
-            dt.drawPath(pen.path)
-            dt.stroke(r=0, g=0, b=0, a=1)
-            # Draw the points and handles
-            for contour in self.interpolatedGlyph.contours:
-                for bPoint in contour.bPoints:
-                    inLoc = self.addPoints(bPoint.anchor, bPoint.bcpIn)
-                    outLoc = self.addPoints(bPoint.anchor, bPoint.bcpOut)
-                    dt.line(inLoc, bPoint.anchor)
-                    dt.line(bPoint.anchor, outLoc)
-                    dt.fill(r=1, g=1, b=1, a=1)    
-                    dt.oval(bPoint.anchor[0] - (ptSize*0.5), bPoint.anchor[1] - (ptSize*0.5), ptSize, ptSize) 
-                    dt.fill(0)
-                    # Draw an "X" over each BCP
-                    if not bPoint.bcpIn == (0, 0):
-                        dt.oval(inLoc[0] - (ptSize*0.5), inLoc[1] - (ptSize*0.5), ptSize, ptSize) 
-                        #dt.line((inLoc[0]-(ptSize*0.5), inLoc[1]-(ptSize*0.5)), (inLoc[0]+(ptSize*0.5), inLoc[1]+(ptSize*0.5)))
-                        #dt.line((inLoc[0]+(ptSize*0.5), inLoc[1]-(ptSize*0.5)), (inLoc[0]-(ptSize*0.5), inLoc[1]+(ptSize*0.5)))
-                    if not bPoint.bcpOut == (0, 0):
-                        dt.oval(outLoc[0] - (ptSize*0.5), outLoc[1] - (ptSize*0.5), ptSize, ptSize) 
-                        #dt.line((outLoc[0]-(ptSize*0.5), outLoc[1]-(ptSize*0.5)), (outLoc[0]+(ptSize*0.5), outLoc[1]+(ptSize*0.5)))
-                        #dt.line((outLoc[0]+(ptSize*0.5), outLoc[1]-(ptSize*0.5)), (outLoc[0]-(ptSize*0.5), outLoc[1]+(ptSize*0.5)))
+    def fontDocumentWillOpen(self, info):
+        self.collectFonts()
+        self.optionsChanged()
 
-            dt.restore()
+    def fontDocumentDidClose(self, info):
+        self.collectFonts()
+        self.optionsChanged()               
         
-        
-    def drawPreview(self, info):
-        # Draw a filled in version of the interpolated glyph
-        scale = info["scale"]
-        if self.interpolatedGlyph:
-            pen = CocoaPen(None)
-            self.interpolatedGlyph.draw(pen)
-            dt.fill(r=0, g=0, b=0, a=0.6)
-            dt.stroke(r=None, g=None, b=None, a=1)
-            dt.save()
-            dt.translate(self.currentGlyph.width)
-            dt.drawPath(pen.path)
-            dt.restore()
-            
+    def optionsChanged(self):
+        firstSourceButton = self.w.getItem("firstSourceButton")
+        secondSourceButton = self.w.getItem("secondSourceButton")
+
+        source0idx = firstSourceButton.get()
+        source1idx = secondSourceButton.get()
+
+        if not source0idx == -1:
+            self.source0 = self.fonts[source0idx]
+            self.source1 = self.fonts[source1idx]
+
+        postEvent(eventName)
 
 
-InterpolationPreviewWindow()
+eventName = f"{DEFAULT_KEY}.changed"
+
+registerSubscriberEvent(
+    subscriberEventName=eventName,
+    methodName="interpolationSliderDidChange",
+    lowLevelEventNames=[eventName],
+    dispatcher="roboFont",
+    documentation="Send when the Interpolation Slider did change parameters.",
+    delay=0,
+    debug=True
+)
+
+InterpolationSliderInterface()
