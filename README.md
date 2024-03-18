@@ -6,4 +6,6 @@ Created for the Type@Cooper “Drawing for Interpolation” workshop at the Typo
 
 The extension is designed to give a simple interface to preview how the points move during an interpolation of two masters. After selecting two UFO masters, an interpolated glyph will be drawn in te current glyph window.
 
-![Interpolation Slider animation](/resources/SliderAnimation.gif)
+![Interpolation Slider animation](source/resources/SliderAnimation.gif)
+
+Updated by Marte Verhaegen for ezui/merz, 2024
