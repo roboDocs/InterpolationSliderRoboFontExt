@@ -1,10 +1,13 @@
 name: Interpolation Slider
 developer: Andy Clymer
-developerURL: http://www.andyclymer.com
+developerURL: http://www.andyclymer.com/
 launchAtStartUp: false
-mainScript: interpolationSlider.py
-version: '3.0'
-addToMenu: []
+mainScript: InterpolationSlider.py
+version: '2'
+addToMenu:
+- path: interpolationSlider.py
+  preferredName: Interpolation Slider...
+  shortKey: ''
 html: true
 requiresVersionMajor: '4'
 requiresVersionMinor: '4'
