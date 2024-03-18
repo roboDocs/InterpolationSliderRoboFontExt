@@ -8,4 +8,6 @@ The extension is designed to give a simple interface to preview how the points m
 
 ![Interpolation Slider animation](source/resources/SliderAnimation.gif)
 
-Updated by Marte Verhaegen for ezui/merz, 2024
+---
+
+Updated by [Marte Verhaegen](https://github.com/martelahaie) for ezui/merz, 2024
