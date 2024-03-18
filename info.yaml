@@ -2,7 +2,7 @@ name: Interpolation Slider
 developer: Andy Clymer
 developerURL: http://www.andyclymer.com/
 launchAtStartUp: false
-mainScript: InterpolationSlider.py
+mainScript: interpolationSlider.py
 version: '2'
 addToMenu:
 - path: interpolationSlider.py
