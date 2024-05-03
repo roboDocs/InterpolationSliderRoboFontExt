@@ -43,7 +43,6 @@ class drawinterpolatedGlyph(Subscriber):
         status = "❌"
 
         currentGlyph = self.getGlyphEditor().getGlyph().asFontParts()
-
         sourceLayer0 = self.controller.source0
         sourceLayer1 = self.controller.source1
 
@@ -54,7 +53,7 @@ class drawinterpolatedGlyph(Subscriber):
 
         interpValue = self.controller.w.getItemValue("interpolationSlider")
 
-        # Check if layers exists in sources
+        # Check if layers exist in sources
         for layer in self.controller.source0.layers:
             if layer.name == currentGlyph.layer.name:
                 sourceLayer0 = layer
