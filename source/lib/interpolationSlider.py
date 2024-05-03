@@ -42,34 +42,39 @@ class drawinterpolatedGlyph(Subscriber):
     def glyphUpdated(self):
         status = "❌"
 
-        glyph0 = CurrentGlyph()
-        sourceLayer0 = glyph0.layer
-        sourceLayer1 = None
+        currentGlyph = self.getGlyphEditor().getGlyph().asFontParts()
 
-        self.referenceGlyphLayer.setPosition((glyph0.width + 30, 0))
+        sourceLayer0 = self.controller.source0
+        sourceLayer1 = self.controller.source1
+
+        self.referenceGlyphLayer.setPosition((currentGlyph.width + 30, 0))
         self.referenceGlyphLayer.clearSublayers()
-        self.previewGlyphLayer.setPosition((glyph0.width + 30, 0))
+        self.previewGlyphLayer.setPosition((currentGlyph.width + 30, 0))
         self.previewGlyphLayer.clearSublayers()
 
         interpValue = self.controller.w.getItemValue("interpolationSlider")
 
-        # Check if same layer exists
+        # Check if layers exists in sources
+        for layer in self.controller.source0.layers:
+            if layer.name == currentGlyph.layer.name:
+                sourceLayer0 = layer
         for layer in self.controller.source1.layers:
-            if layer.name == sourceLayer0.name:
+            if layer.name == currentGlyph.layer.name:
                 sourceLayer1 = layer
 
-        if sourceLayer1:
-            if glyph0.name in sourceLayer1:
-                glyph1 = sourceLayer1[glyph0.name]
+        if currentGlyph.name in sourceLayer0 and currentGlyph.name in sourceLayer1:
+            glyph0 = sourceLayer0[currentGlyph.name]
+            glyph1 = sourceLayer1[currentGlyph.name]
 
-                self.interpolatedGlyph = RGlyph()
-                # Interpolate
-                self.interpolatedGlyph.interpolate(interpValue, glyph0, glyph1)
+            # Interpolate
+            self.interpolatedGlyph = RGlyph()
+            self.interpolatedGlyph.interpolate(interpValue, glyph0, glyph1)
 
-                if glyph0 == glyph1:
-                    status = "⚪️"
-                elif len(self.interpolatedGlyph.contours) > 0:
-                    status = "✅"
+            if glyph0 == glyph1:
+                print('The same!')
+                status = "⚪️"
+            elif len(self.interpolatedGlyph.contours) > 0:
+                status = "✅"
             
         self.controller.w.getItem("compatibilityText").set(f"Compatibility: {status}")
 
