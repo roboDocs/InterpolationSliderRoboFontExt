@@ -43,12 +43,12 @@ class drawinterpolatedGlyph(Subscriber):
         status = "❌"
 
         glyph0 = CurrentGlyph()
-        sourceLayer0 = currentGlyph.layer
+        sourceLayer0 = glyph0.layer
         sourceLayer1 = None
 
-        self.referenceGlyphLayer.setPosition((currentGlyph.width + 30, 0))
+        self.referenceGlyphLayer.setPosition((glyph0.width + 30, 0))
         self.referenceGlyphLayer.clearSublayers()
-        self.previewGlyphLayer.setPosition((currentGlyph.width + 30, 0))
+        self.previewGlyphLayer.setPosition((glyph0.width + 30, 0))
         self.previewGlyphLayer.clearSublayers()
 
         interpValue = self.controller.w.getItemValue("interpolationSlider")
@@ -60,7 +60,7 @@ class drawinterpolatedGlyph(Subscriber):
 
         if sourceLayer1:
             if glyph0.name in sourceLayer1:
-                glyph1 = sourceLayer1[currentGlyph.name]
+                glyph1 = sourceLayer1[glyph0.name]
 
                 self.interpolatedGlyph = RGlyph()
                 # Interpolate
