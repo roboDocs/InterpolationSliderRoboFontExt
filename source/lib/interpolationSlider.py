@@ -42,7 +42,10 @@ class drawinterpolatedGlyph(Subscriber):
     def glyphUpdated(self):
         status = "❌"
 
-        currentGlyph = CurrentGlyph()
+        glyph0 = CurrentGlyph()
+        sourceLayer0 = currentGlyph.layer
+        sourceLayer1 = None
+
         self.referenceGlyphLayer.setPosition((currentGlyph.width + 30, 0))
         self.referenceGlyphLayer.clearSublayers()
         self.previewGlyphLayer.setPosition((currentGlyph.width + 30, 0))
@@ -50,20 +53,24 @@ class drawinterpolatedGlyph(Subscriber):
 
         interpValue = self.controller.w.getItemValue("interpolationSlider")
 
-        if currentGlyph.name in self.controller.source0 and currentGlyph.name in self.controller.source1:
+        # Check if same layer exists
+        for layer in self.controller.source1.layers:
+            if layer.name == sourceLayer0.name:
+                sourceLayer1 = layer
 
-            glyph0 = self.controller.source0[currentGlyph.name]
-            glyph1 = self.controller.source1[currentGlyph.name]
+        if sourceLayer1:
+            if glyph0.name in sourceLayer1:
+                glyph1 = sourceLayer1[currentGlyph.name]
 
-            self.interpolatedGlyph = RGlyph()
-            # Interpolate
-            self.interpolatedGlyph.interpolate(interpValue, glyph0, glyph1)
+                self.interpolatedGlyph = RGlyph()
+                # Interpolate
+                self.interpolatedGlyph.interpolate(interpValue, glyph0, glyph1)
 
-            if glyph0 == glyph1:
-                status = "⚪️"
-            elif len(self.interpolatedGlyph.contours) > 0:
-                status = "✅"
-        
+                if glyph0 == glyph1:
+                    status = "⚪️"
+                elif len(self.interpolatedGlyph.contours) > 0:
+                    status = "✅"
+            
         self.controller.w.getItem("compatibilityText").set(f"Compatibility: {status}")
 
         if not status == "❌":
@@ -83,53 +90,54 @@ class drawinterpolatedGlyph(Subscriber):
         glyphPath = self.interpolatedGlyph.getRepresentation("merz.CGPath")
         glyphLayer.setPath(glyphPath)
 
-        for contour in self.interpolatedGlyph.contours:
-            for bPoint in contour.bPoints:
-                inLoc = self.addPoints(bPoint.anchor, bPoint.bcpIn)
-                outLoc = self.addPoints(bPoint.anchor, bPoint.bcpOut)
+        if self.controller.w.getItemValue('showPointsCheckbox'):
+            for contour in self.interpolatedGlyph.contours:
+                for bPoint in contour.bPoints:
+                    inLoc = self.addPoints(bPoint.anchor, bPoint.bcpIn)
+                    outLoc = self.addPoints(bPoint.anchor, bPoint.bcpOut)
 
-                self.referenceGlyphLayer.appendLineSublayer(
-                   startPoint=inLoc,
-                   endPoint=bPoint.anchor,
-                   strokeWidth=.5,
-                   strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
-                )
-                self.referenceGlyphLayer.appendLineSublayer(
-                   startPoint=bPoint.anchor,
-                   endPoint=outLoc,
-                   strokeWidth=.5,
-                   strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
-                )
-                self.referenceGlyphLayer.appendSymbolSublayer(
-                    position=outLoc,
-                    imageSettings=dict(
-                        name="oval",
-                        size=(5, 5),
-                        fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
-                        strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
-                        strokeWidth=.5,
+                    self.referenceGlyphLayer.appendLineSublayer(
+                       startPoint=inLoc,
+                       endPoint=bPoint.anchor,
+                       strokeWidth=.5,
+                       strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
                     )
-                )
-                self.referenceGlyphLayer.appendSymbolSublayer(
-                    position=inLoc,
-                    imageSettings=dict(
-                        name="oval",
-                        size=(5, 5),
-                        fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
-                        strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
-                        strokeWidth=.5,
+                    self.referenceGlyphLayer.appendLineSublayer(
+                       startPoint=bPoint.anchor,
+                       endPoint=outLoc,
+                       strokeWidth=.5,
+                       strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
                     )
-                )
-                self.referenceGlyphLayer.appendSymbolSublayer(
-                    position=bPoint.anchor,
-                    imageSettings=dict(
-                        name="oval",
-                        size=(5, 5),
-                        fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
-                        strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
-                        strokeWidth=.5,
+                    self.referenceGlyphLayer.appendSymbolSublayer(
+                        position=outLoc,
+                        imageSettings=dict(
+                            name="oval",
+                            size=(5, 5),
+                            fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
+                            strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+                            strokeWidth=.5,
+                        )
                     )
-                )
+                    self.referenceGlyphLayer.appendSymbolSublayer(
+                        position=inLoc,
+                        imageSettings=dict(
+                            name="oval",
+                            size=(5, 5),
+                            fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
+                            strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+                            strokeWidth=.5,
+                        )
+                    )
+                    self.referenceGlyphLayer.appendSymbolSublayer(
+                        position=bPoint.anchor,
+                        imageSettings=dict(
+                            name="oval",
+                            size=(5, 5),
+                            fillColor=(not isDarkMode, not isDarkMode, not isDarkMode, 1),
+                            strokeColor=(isDarkMode, isDarkMode, isDarkMode, 1),
+                            strokeWidth=.5,
+                        )
+                    )
  
     def drawPreviewGlyph(self):
         # Draw a filled in version of the interpolated glyph
@@ -178,6 +186,7 @@ class InterpolationSliderInterface(Subscriber, ezui.WindowController):
         (This is a PopUpButton. ...) @secondSourceButton
         Compatibility: ⚪️   @compatibilityText
         ---
+        [X] Show Points     @showPointsCheckbox
         --X-- @interpolationSlider
         """
         descriptionData = dict(
@@ -232,6 +241,9 @@ class InterpolationSliderInterface(Subscriber, ezui.WindowController):
 
     def secondSourceButtonCallback(self, sender):
         self.optionsChanged()
+
+    def showPointsCheckboxCallback(self, sender):
+        postEvent(eventName)
 
     def collectFonts(self):
         firstSourceButton = self.w.getItem("firstSourceButton")
@@ -329,4 +341,4 @@ registerSubscriberEvent(
     debug=True
 )
 
-InterpolationSliderInterface()
+OpenWindow(InterpolationSliderInterface)
