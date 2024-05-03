@@ -94,6 +94,7 @@ class drawinterpolatedGlyph(Subscriber):
         glyphPath = self.interpolatedGlyph.getRepresentation("merz.CGPath")
         glyphLayer.setPath(glyphPath)
 
+        # only show points when checkbox is ticked
         if self.controller.w.getItemValue('showPointsCheckbox'):
             for contour in self.interpolatedGlyph.contours:
                 for bPoint in contour.bPoints:
