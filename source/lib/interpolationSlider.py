@@ -1,6 +1,7 @@
 import ezui
 import merz
 from mojo.events import postEvent
+from mojo.pens import DecomposePointPen
 from mojo.roboFont import AllFonts, CurrentGlyph, RGlyph
 from mojo.subscriber import Subscriber, registerGlyphEditorSubscriber, registerSubscriberEvent, unregisterGlyphEditorSubscriber
 from mojo.UI import inDarkMode    
@@ -61,16 +62,23 @@ class drawinterpolatedGlyph(Subscriber):
             if layer.name == currentGlyph.layer.name:
                 sourceLayer1 = layer
 
-        if currentGlyph.name in sourceLayer0 and currentGlyph.name in sourceLayer1:
-            glyph0 = sourceLayer0[currentGlyph.name]
-            glyph1 = sourceLayer1[currentGlyph.name]
+        if currentGlyph is not None and currentGlyph.name in sourceLayer0 and currentGlyph.name in sourceLayer1:
+
+            glyph0 = RGlyph()
+            dstPen = glyph0.getPointPen()
+            decomposePen = DecomposePointPen(sourceLayer0, dstPen)
+            sourceLayer0[currentGlyph.name].drawPoints(decomposePen)
+
+            glyph1 = RGlyph()
+            dstPen = glyph1.getPointPen()
+            decomposePen = DecomposePointPen(sourceLayer1, dstPen)
+            sourceLayer1[currentGlyph.name].drawPoints(decomposePen)   
 
             # Interpolate
             self.interpolatedGlyph = RGlyph()
             self.interpolatedGlyph.interpolate(interpValue, glyph0, glyph1)
 
             if glyph0 == glyph1:
-                print('The same!')
                 status = "⚪️"
             elif len(self.interpolatedGlyph.contours) > 0:
                 status = "✅"
